@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use Exception;
 use Illuminate\Http\Request;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class AuthController extends Controller
 {
@@ -14,7 +16,7 @@ class AuthController extends Controller
      */
     public function __construct()
     {
-        $this->middleware('auth:api', ['except' => ['login']]);
+        $this->middleware('auth:api', ['except' => ['login', 'refresh']]);
     }
 
     /**
@@ -26,11 +28,19 @@ class AuthController extends Controller
     {
         $credentials = request(['email', 'password']);
 
-        if (! $token = auth()->attempt($credentials)) {
+        if (! $token = auth('api')->attempt($credentials)) {
             return response()->json(['error' => 'Unauthorized'], 401);
         }
 
-        return $this->respondWithToken($token);
+        $data = [
+            'sub' => auth('api')->user()->id,
+            'random' => rand() . time(),
+            'exp' => time() + config('jwt.refresh_ttl')
+        ];
+
+        $refreshToken = JWTAuth::getJWTProvider()->encode($data);
+
+        return $this->respondWithToken($token, $refreshToken);
     }
 
     /**
@@ -40,7 +50,7 @@ class AuthController extends Controller
      */
     public function profile()
     {
-        return response()->json(auth()->user());
+        return response()->json(auth('api')->user());
     }
 
     /**
@@ -50,7 +60,7 @@ class AuthController extends Controller
      */
     public function logout()
     {
-        auth()->logout();
+        auth('api')->logout();
 
         return response()->json(['message' => 'Successfully logged out']);
     }
@@ -62,7 +72,18 @@ class AuthController extends Controller
      */
     public function refresh()
     {
-        return $this->respondWithToken(auth()->refresh());
+        $refreshToken = request()->refresh_token;
+        try {
+            $data = JWTAuth::getJWTProvider()->decode($refreshToken);
+
+            // Get user info
+            // dd($data);
+            return response()->json($data);
+        } catch (Exception $e) {
+            return response()->json(['error' => 'Refresh token invalid'], 500);
+        }
+
+        // return $this->respondWithToken(auth('api')->refresh());
     }
 
     /**
@@ -72,12 +93,13 @@ class AuthController extends Controller
      *
      * @return \Illuminate\Http\JsonResponse
      */
-    protected function respondWithToken($token)
+    protected function respondWithToken($token, $refreshToken)
     {
         return response()->json([
             'access_token' => $token,
+            'refresh_token' => $refreshToken,
             'token_type' => 'bearer',
-            'expires_in' => auth()->factory()->getTTL() * 60
+            'expires_in' => auth('api')->factory()->getTTL() * 60
         ]);
     }
 }

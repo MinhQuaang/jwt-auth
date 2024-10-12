@@ -23,7 +23,7 @@ Route::group([
 ], function ($router) {
     Route::post('login', [AuthController::class, 'login']);
     Route::get('profile', [AuthController::class, 'profile']);
+    Route::post('refresh', [AuthController::class, 'refresh']);
     // Route::post('login', 'AuthController@login');
     // Route::post('logout', 'AuthController@logout');
-    // Route::post('refresh', 'AuthController@refresh');
 });
