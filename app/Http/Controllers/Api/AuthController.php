@@ -31,7 +31,7 @@ class AuthController extends Controller
         $credentials = request(['email', 'password']);
 
         if (! $token = auth('api')->attempt($credentials)) {
-            return response()->json(['error' => 'Unauthorized'], 401);
+            return response()->json(['error' => 'Email or password invalid'], 401);
         }
         $refreshToken = $this->createRefreshToken();
 
@@ -108,7 +108,11 @@ class AuthController extends Controller
             'refresh_token' => $refreshToken,
             'token_type' => 'bearer',
             'expires_in' => auth('api')->factory()->getTTL() * 60
-        ]);
+        ])->withCookie(cookie(
+            'refresh_token',
+            $refreshToken,
+            1000 * 60 * 60 * 24,
+        ));
     }
 
     public function createRefreshToken()
