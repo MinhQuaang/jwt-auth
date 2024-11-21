@@ -31,9 +31,9 @@ class AuthController extends Controller
         $credentials = request(['email', 'password']);
 
         if (! $token = auth('api')->attempt($credentials)) {
-            return response()->json(['error' => 'Email or password invalid'], 401);
+            return response()->json(['message' => 'Email or password invalid'], 404);
         }
-        $refreshToken = $this->createRefreshToken();
+        $refreshToken = $this->createRefreshToken(auth('api')->user()->id);
 
         return $this->respondWithToken($token, $refreshToken);
     }
@@ -74,18 +74,15 @@ class AuthController extends Controller
         $refreshToken = request()->refresh_token;
         try {
             $decode = JWTAuth::getJWTProvider()->decode($refreshToken);
-            // Get user info
             $user = User::find($decode['user_id']);
+            // Get user info
             if (! $user) {
                 return response()->json(['error' => 'User not found'], 404);
             }
-            // Invalid old access_token
-            auth('api')->invalidate();
-
             // Create new token
             $token = auth('api')->login($user);
 
-            $refreshToken = $this->createRefreshToken();
+            $refreshToken = $this->createRefreshToken($user->id);
             return $this->respondWithToken($token, $refreshToken);
         } catch (JWTException $e) {
             return response()->json(['error' => 'Refresh token invalid'], 500);
@@ -108,17 +105,13 @@ class AuthController extends Controller
             'refresh_token' => $refreshToken,
             'token_type' => 'bearer',
             'expires_in' => auth('api')->factory()->getTTL() * 60
-        ])->withCookie(cookie(
-            'refresh_token',
-            $refreshToken,
-            1000 * 60 * 60 * 24,
-        ));
+        ]);
     }
 
-    public function createRefreshToken()
+    public function createRefreshToken($id)
     {
         $data = [
-            'user_id' => auth('api')->user()->id,
+            'user_id' => $id,
             'random' => rand() . time(),
             'exp' => time() + config('jwt.refresh_ttl')
         ];
